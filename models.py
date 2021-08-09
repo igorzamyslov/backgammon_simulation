@@ -63,9 +63,12 @@ class Cell:
                 raise RuntimeError("Colour must be provided when updating empty cell")
             elif self.count == 0:
                 self._colour = None
-        elif new_colour != self.colour:
-            raise RuntimeError("Cannot change colour during cell update, "
-                               "must be emptied first")
+        else:
+            if self.colour is None:
+                self._colour = new_colour
+            elif new_colour != self.colour:
+                raise RuntimeError("Cannot change colour during cell update, "
+                                   "must be emptied first")
         self._verify()
 
 
@@ -144,11 +147,11 @@ class Board:
     def move(self, from_coords: Coordinates, count: int):
         cell = self.get_cell(from_coords)
         assert not cell.is_empty, f"Moving from empty cell: {from_coords}"
+        colour = cast(Colour, cell.colour)  # get the colour before updating the cell
         # update current cell
         cell.update_cell(new_count=cell.count - 1)
 
         # update target cell, if required
-        colour = cast(Colour, cell.colour)
         quadrants_order = COLOUR_QUADRANTS_ORDER[colour]
         target_cell_coords = self.get_target_cell_coords(from_coords, count, quadrants_order)
         if target_cell_coords is None:
@@ -157,7 +160,7 @@ class Board:
             flattened_coords = self._get_flattened_coordinates(quadrants_order)
             current_index = flattened_coords.index(from_coords)
             previous_cells = (self.get_cell(c) for c in flattened_coords[:current_index])
-            assert all(c.is_empty or c.colour is colour for c in previous_cells), \
+            assert all(c.is_empty or c.colour != colour for c in previous_cells), \
                 "Wrong move, previous cells must be emptied first"
         else:
             target_cell = self.get_cell(target_cell_coords)
@@ -171,9 +174,13 @@ class Board:
 
 
 # if __name__ == "__main__":
-#     Board((
+#     board = Board((
 #         (Cell(Colour.WHITE, 15), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
 #         (Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
 #         (Cell(Colour.BLACK, 15), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
 #         (Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
-#     )).print_board()
+#     ))
+#     board.print_board()
+#     for _ in range(15):
+#         board.move(Coordinates(0, 0), 23)
+#     board.move(Coordinates(3, 5), 1)
