@@ -5,11 +5,15 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, cast
 from itertools import product, chain
 from functools import cache
+from copy import deepcopy
 
 
 class Colour(enum.Enum):
     BLACK = enum.auto()
     WHITE = enum.auto()
+
+    def get_opposite_colour(self) -> Colour:
+        return Colour.BLACK if self == Colour.WHITE else Colour.WHITE
 
 
 QuadrantsOrderType = Tuple[int, int, int, int]
@@ -144,6 +148,55 @@ class Board:
         except IndexError:
             return None
 
+    # def get_possible_moves(self, die1: int, die2: int,
+    #                        colour: Colour) -> List[List[Tuple[Coordinates, int]]]:
+    #     moves_permutations: List[Tuple[int, ...]]
+    #     if die1 == die2:
+    #         moves_permutations = [(die1, die1, die1, die1)]
+    #     else:
+    #         moves_permutations = [(die1, die2), (die2, die1)]
+
+    #     def get_relevant_coordinates(board: Board) -> List[Coordinates]:
+    #         return [Coordinates(q, c)
+    #                 for q, quadrant in enumerate(board.quadrants)
+    #                 for c, cell in enumerate(quadrant)
+    #                 if cell.colour == colour]
+
+    #     possible_moves = set()
+    #     for move_perm in moves_permutations:
+    #         board = deepcopy(self)
+    #         for value in move_perm:
+    #             for quadrant
+
+    def _check_prime(self, target_coords: Coordinates, colour: Colour):
+        """ check if prime will be built and if it is possible """
+        quadrants_order = COLOUR_QUADRANTS_ORDER[colour]
+        flattened_coords = self._get_flattened_coordinates(quadrants_order)
+        target_index = flattened_coords.index(target_coords)
+        count = 1
+        # count back
+        if target_index > 0:
+            for coords in flattened_coords[target_index - 1::-1]:
+                cell = self.get_cell(coords)
+                if cell.colour == colour:
+                    count += 1
+                else:
+                    break
+        # count forward
+        for coords in flattened_coords[target_index + 1:]:
+            cell = self.get_cell(coords)
+            if cell.colour == colour:
+                count += 1
+            else:
+                break
+        # in case prime was created
+        if count >= 6:
+            # check if it is valid
+            opposite_quadrants_order = COLOUR_QUADRANTS_ORDER[colour.get_opposite_colour()]
+            if all(cell.is_empty or cell.colour == colour
+                   for cell in self.quadrants[opposite_quadrants_order[-1]]):
+                raise RuntimeError("Prime created when not yet possible")
+
     def move(self, from_coords: Coordinates, count: int):
         cell = self.get_cell(from_coords)
         assert not cell.is_empty, f"Moving from empty cell: {from_coords}"
@@ -154,23 +207,25 @@ class Board:
         # update target cell, if required
         quadrants_order = COLOUR_QUADRANTS_ORDER[colour]
         target_cell_coords = self.get_target_cell_coords(from_coords, count, quadrants_order)
-        if target_cell_coords is None:
-            # out of board situation
-            assert from_coords.quadrant == quadrants_order[-1], "Out of board from outer board"
-            flattened_coords = self._get_flattened_coordinates(quadrants_order)
-            current_index = flattened_coords.index(from_coords)
-            previous_cells = (self.get_cell(c) for c in flattened_coords[:current_index])
-            assert all(c.is_empty or c.colour != colour for c in previous_cells), \
-                "Wrong move, previous cells must be emptied first"
-        else:
-            target_cell = self.get_cell(target_cell_coords)
-            if target_cell.is_empty:
-                target_cell.update_cell(new_count=1, new_colour=colour)
+        try:
+            if target_cell_coords is None:
+                # out of board situation
+                assert from_coords.quadrant == quadrants_order[-1], "Out of board from outer board"
+                flattened_coords = self._get_flattened_coordinates(quadrants_order)
+                current_index = flattened_coords.index(from_coords)
+                previous_cells = (self.get_cell(c) for c in flattened_coords[:current_index])
+                assert all(c.is_empty or c.colour != colour for c in previous_cells), \
+                    "Wrong move, previous cells must be emptied first"
             else:
-                try:
-                    target_cell.update_cell(new_count=target_cell.count + 1, new_colour=colour)
-                except RuntimeError as error:
-                    raise RuntimeError("Wrong move, target cell is occupied") from error
+                target_cell = self.get_cell(target_cell_coords)
+                if not target_cell.is_empty and target_cell.colour != colour:
+                    raise RuntimeError("Wrong move, target cell is occupied")
+                self._check_prime(target_cell_coords, colour)
+                target_cell.update_cell(new_count=target_cell.count + 1, new_colour=colour)
+        except (AssertionError, RuntimeError):
+            # restore previous state
+            cell.update_cell(new_count=cell.count + 1, new_colour=colour)
+            raise
 
 
 # if __name__ == "__main__":
@@ -181,6 +236,11 @@ class Board:
 #         (Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
 #     ))
 #     board.print_board()
-#     for _ in range(15):
-#         board.move(Coordinates(0, 0), 23)
-#     board.move(Coordinates(3, 5), 1)
+#     board.move(Coordinates(0, 0), 10)
+#     board.move(Coordinates(0, 0), 9)
+#     board.move(Coordinates(0, 0), 7)
+#     board.move(Coordinates(0, 0), 6)
+#     board.move(Coordinates(0, 0), 5)
+#     board.move(Coordinates(2, 0), 23)
+#     board.move(Coordinates(0, 0), 8)
+#     board.print_board()
