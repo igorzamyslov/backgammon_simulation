@@ -25,7 +25,7 @@ COLOUR_QUADRANTS_ORDER: Dict[Colour, QuadrantsOrderType] = {
 }
 
 
-@dataclass
+@dataclass(frozen=True)
 class Coordinates:
     quadrant: int
     cell: int
@@ -148,25 +148,49 @@ class Board:
         except IndexError:
             return None
 
-    # def get_possible_moves(self, die1: int, die2: int,
-    #                        colour: Colour) -> List[List[Tuple[Coordinates, int]]]:
-    #     moves_permutations: List[Tuple[int, ...]]
-    #     if die1 == die2:
-    #         moves_permutations = [(die1, die1, die1, die1)]
-    #     else:
-    #         moves_permutations = [(die1, die2), (die2, die1)]
+    def get_possible_moves(self, die1: int, die2: int,
+                           colour: Colour) -> List[Tuple[Tuple[Coordinates, int], ...]]:
+        moves_permutations: List[Tuple[int, ...]]
+        if die1 == die2:
+            moves_permutations = [(die1, die1, die1, die1)]
+        else:
+            moves_permutations = [(die1, die2), (die2, die1)]
 
-    #     def get_relevant_coordinates(board: Board) -> List[Coordinates]:
-    #         return [Coordinates(q, c)
-    #                 for q, quadrant in enumerate(board.quadrants)
-    #                 for c, cell in enumerate(quadrant)
-    #                 if cell.colour == colour]
+        def get_relevant_coordinates(board: Board) -> List[Coordinates]:
+            return [Coordinates(q, c)
+                    for q, quadrant in enumerate(board.quadrants)
+                    for c, cell in enumerate(quadrant)
+                    if cell.colour == colour]
 
-    #     possible_moves = set()
-    #     for move_perm in moves_permutations:
-    #         board = deepcopy(self)
-    #         for value in move_perm:
-    #             for quadrant
+        quadrants_order = COLOUR_QUADRANTS_ORDER[colour]
+
+        # moves_permutation + previous moves + board + index
+        boards: List[Tuple[List[Tuple[Coordinates, int]], Board, Tuple[int, ...], int]] = \
+            [([], self, moves_perm, 0) for moves_perm in moves_permutations]
+        possible_moves = set()
+        while boards:
+            previous_moves, board, moves_perm, index = boards.pop()
+            for r_coords in get_relevant_coordinates(board):
+                # skip third move from HEAD if it is an exception
+                if (index > 1 and r_coords == Coordinates(quadrants_order[0], 0)
+                        and (die1, die2) in {(3, 3), (4, 4), (6, 6)}):
+                    continue
+                # skip second move from HEAD if it is *not* an exception
+                if (index > 0 and r_coords == Coordinates(quadrants_order[0], 0)
+                        and (die1, die2) not in {(3, 3), (4, 4), (6, 6)}):
+                    continue
+                new_board = deepcopy(board)
+                new_move = (r_coords, moves_perm[index])
+                try:
+                    new_board.move(*new_move)
+                except (AssertionError, RuntimeError):
+                    continue
+                new_moves = previous_moves + [new_move]
+                possible_moves.add(tuple(new_moves))
+                if index < len(moves_permutations[0]) - 1:
+                    boards.append((new_moves, new_board, moves_perm, index + 1))
+        max_moves_length = max(len(moves) for moves in possible_moves)
+        return [moves for moves in possible_moves if len(moves) == max_moves_length]
 
     def _check_prime(self, target_coords: Coordinates, colour: Colour):
         """ check if prime will be built and if it is possible """
@@ -235,6 +259,7 @@ class Board:
 #         (Cell(Colour.BLACK, 15), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
 #         (Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
 #     ))
+#     print(board.get_possible_moves(3, 3, Colour.WHITE))
 #     board.print_board()
 #     board.move(Coordinates(0, 0), 10)
 #     board.move(Coordinates(0, 0), 9)
