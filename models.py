@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+import random
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, cast
 from itertools import product, chain
@@ -148,7 +149,7 @@ class Board:
         except IndexError:
             return None
 
-    def get_possible_moves(self, die1: int, die2: int,
+    def get_possible_turns(self, die1: int, die2: int,
                            colour: Colour) -> List[Tuple[Tuple[Coordinates, int], ...]]:
         moves_permutations: List[Tuple[int, ...]]
         if die1 == die2:
@@ -167,7 +168,7 @@ class Board:
         # moves_permutation + previous moves + board + index
         boards: List[Tuple[List[Tuple[Coordinates, int]], Board, Tuple[int, ...], int]] = \
             [([], self, moves_perm, 0) for moves_perm in moves_permutations]
-        possible_moves = set()
+        possible_turns = set()
         while boards:
             previous_moves, board, moves_perm, index = boards.pop()
             for r_coords in get_relevant_coordinates(board):
@@ -185,12 +186,16 @@ class Board:
                     new_board.move(*new_move)
                 except (AssertionError, RuntimeError):
                     continue
-                new_moves = previous_moves + [new_move]
-                possible_moves.add(tuple(new_moves))
+                new_turn = previous_moves + [new_move]
+                possible_turns.add(tuple(new_turn))
                 if index < len(moves_permutations[0]) - 1:
-                    boards.append((new_moves, new_board, moves_perm, index + 1))
-        max_moves_length = max(len(moves) for moves in possible_moves)
-        return [moves for moves in possible_moves if len(moves) == max_moves_length]
+                    boards.append((new_turn, new_board, moves_perm, index + 1))
+
+        if possible_turns:
+            max_turn_length = max(len(turn) for turn in possible_turns)
+            return [turn for turn in possible_turns if len(turn) == max_turn_length]
+        else:
+            return []
 
     def _check_prime(self, target_coords: Coordinates, colour: Colour):
         """ check if prime will be built and if it is possible """
@@ -252,20 +257,38 @@ class Board:
             raise
 
 
-# if __name__ == "__main__":
-#     board = Board((
-#         (Cell(Colour.WHITE, 15), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
-#         (Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
-#         (Cell(Colour.BLACK, 15), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
-#         (Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
-#     ))
-#     print(board.get_possible_moves(3, 3, Colour.WHITE))
-#     board.print_board()
-#     board.move(Coordinates(0, 0), 10)
-#     board.move(Coordinates(0, 0), 9)
-#     board.move(Coordinates(0, 0), 7)
-#     board.move(Coordinates(0, 0), 6)
-#     board.move(Coordinates(0, 0), 5)
-#     board.move(Coordinates(2, 0), 23)
-#     board.move(Coordinates(0, 0), 8)
-#     board.print_board()
+if __name__ == "__main__":
+    board = Board((
+        (Cell(Colour.WHITE, 15), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
+        (Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
+        (Cell(Colour.BLACK, 15), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
+        (Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
+    ))
+
+    def roll_dice() -> Tuple[int, int]:
+        return random.randint(1, 6), random.randint(1, 6)
+
+    def check_win(colour: Colour) -> bool:
+        return all(cell.is_empty or cell.colour != colour
+                   for quadrant in board.quadrants
+                   for cell in quadrant)
+
+    colour = Colour.WHITE
+    board = Board((
+        (Cell(Colour.WHITE, 15), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
+        (Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
+        (Cell(Colour.BLACK, 15), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
+        (Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
+    ))
+    while True:
+        die1, die2 = roll_dice()
+        possible_turns = board.get_possible_turns(die1, die2, colour)
+        if possible_turns:
+            turn = random.choice(possible_turns)
+            for move in turn:
+                board.move(*move)
+            # board.print_board()
+            if check_win(colour):
+                print(f"{colour} won!")
+                break
+        colour = colour.get_opposite_colour()
