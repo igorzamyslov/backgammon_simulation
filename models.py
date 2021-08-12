@@ -226,6 +226,24 @@ class Board:
                    for cell in self.quadrants[opposite_quadrants_order[-1]]):
                 raise RuntimeError("Prime created when not yet possible")
 
+    def _check_out_of_board_move(self, from_coords, count, quadrants_order, colour):
+        # out of board situation
+        assert from_coords.quadrant == quadrants_order[-1], "Out of board from outer board"
+        # check all pieces in home board
+        outer_board_cells = (c for q in quadrants_order[:-1] for c in self.quadrants[q])
+        assert all(c.is_empty or c.colour != colour for c in outer_board_cells), \
+            "Wrong move, outer board cells must be emptied first"
+        # check count is
+        #   - either the same with the moved piece
+        #   - or there are no other pieces before the current one
+        if from_coords.cell - 4 != count:
+            # flattened_coords = self._get_flattened_coordinates(quadrants_order)
+            # current_index = flattened_coords.index(from_coords)
+            prev_home_board_cells = \
+                (c for c in self.quadrants[quadrants_order[-1]][:from_coords.cell])
+            assert all(c.is_empty or c.colour != colour for c in prev_home_board_cells), \
+                "Wrong move, home board cells must be emptied first"
+
     def move(self, from_coords: Coordinates, count: int):
         cell = self.get_cell(from_coords)
         assert not cell.is_empty, f"Moving from empty cell: {from_coords}"
@@ -238,13 +256,7 @@ class Board:
         target_cell_coords = self.get_target_cell_coords(from_coords, count, quadrants_order)
         try:
             if target_cell_coords is None:
-                # out of board situation
-                assert from_coords.quadrant == quadrants_order[-1], "Out of board from outer board"
-                flattened_coords = self._get_flattened_coordinates(quadrants_order)
-                current_index = flattened_coords.index(from_coords)
-                previous_cells = (self.get_cell(c) for c in flattened_coords[:current_index])
-                assert all(c.is_empty or c.colour != colour for c in previous_cells), \
-                    "Wrong move, previous cells must be emptied first"
+                self._check_out_of_board_move(from_coords, count, quadrants_order, colour)
             else:
                 target_cell = self.get_cell(target_cell_coords)
                 if not target_cell.is_empty and target_cell.colour != colour:
@@ -257,38 +269,48 @@ class Board:
             raise
 
 
-if __name__ == "__main__":
-    board = Board((
-        (Cell(Colour.WHITE, 15), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
-        (Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
-        (Cell(Colour.BLACK, 15), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
-        (Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
-    ))
+@dataclass
+class Game:
+    board: Board
+    current_player: Colour = Colour.WHITE
+    finished: bool = False
 
+    @staticmethod
     def roll_dice() -> Tuple[int, int]:
         return random.randint(1, 6), random.randint(1, 6)
 
-    def check_win(colour: Colour) -> bool:
-        return all(cell.is_empty or cell.colour != colour
-                   for quadrant in board.quadrants
+    def check_win(self) -> bool:
+        return all(cell.is_empty or cell.colour != self.current_player
+                   for quadrant in self.board.quadrants
                    for cell in quadrant)
 
-    colour = Colour.WHITE
-    board = Board((
+    def _finish_turn(self):
+        if self.check_win():
+            self.finished = True
+            print(f"{self.current_player} won!")
+        else:
+            self.current_player = self.current_player.get_opposite_colour()
+
+    def make_random_turn(self):
+        die1, die2 = self.roll_dice()
+        print(die1, die2)
+        possible_turns = self.board.get_possible_turns(die1, die2, self.current_player)
+        if possible_turns:
+            turn = random.choice(possible_turns)
+            for move in turn:
+                self.board.move(*move)
+            self.board.print_board()
+        self._finish_turn()
+
+
+if __name__ == "__main__":
+    board1 = Board((
         (Cell(Colour.WHITE, 15), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
         (Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
         (Cell(Colour.BLACK, 15), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
         (Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0), Cell(None, 0)),
     ))
-    while True:
-        die1, die2 = roll_dice()
-        possible_turns = board.get_possible_turns(die1, die2, colour)
-        if possible_turns:
-            turn = random.choice(possible_turns)
-            for move in turn:
-                board.move(*move)
-            # board.print_board()
-            if check_win(colour):
-                print(f"{colour} won!")
-                break
-        colour = colour.get_opposite_colour()
+
+    game = Game(deepcopy(board1))
+    while not game.finished:
+        game.make_random_turn()
