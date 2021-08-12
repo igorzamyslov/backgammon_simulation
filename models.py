@@ -78,6 +78,8 @@ class Cell:
 
 
 BoardQuadrantType = Tuple[Cell, Cell, Cell, Cell, Cell, Cell]
+MoveType = Tuple[Coordinates, int]
+TurnType = Tuple[MoveType, ...]
 
 
 @dataclass
@@ -149,8 +151,7 @@ class Board:
         except IndexError:
             return None
 
-    def get_possible_turns(self, die1: int, die2: int,
-                           colour: Colour) -> List[Tuple[Tuple[Coordinates, int], ...]]:
+    def get_possible_turns(self, die1: int, die2: int, colour: Colour) -> List[TurnType]:
         moves_permutations: List[Tuple[int, ...]]
         if die1 == die2:
             moves_permutations = [(die1, die1, die1, die1)]
@@ -279,27 +280,30 @@ class Game:
     def roll_dice() -> Tuple[int, int]:
         return random.randint(1, 6), random.randint(1, 6)
 
-    def check_win(self) -> bool:
-        return all(cell.is_empty or cell.colour != self.current_player
+    def check_win(self, colour: Colour) -> bool:
+        return all(cell.is_empty or cell.colour != colour
                    for quadrant in self.board.quadrants
                    for cell in quadrant)
 
     def _finish_turn(self):
-        if self.check_win():
+        if self.check_win(self.current_player):
             self.finished = True
             print(f"{self.current_player} won!")
         else:
             self.current_player = self.current_player.get_opposite_colour()
 
+    def make_turn(self, turn: TurnType):
+        for move in turn:
+            self.board.move(*move)
+        self._finish_turn()
+
     def make_random_turn(self):
         die1, die2 = self.roll_dice()
-        print(die1, die2)
         possible_turns = self.board.get_possible_turns(die1, die2, self.current_player)
         if possible_turns:
             turn = random.choice(possible_turns)
             for move in turn:
                 self.board.move(*move)
-            self.board.print_board()
         self._finish_turn()
 
 
